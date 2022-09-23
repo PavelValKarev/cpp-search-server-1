@@ -69,9 +69,6 @@ struct SearchQuery
 SearchQuery search_query ;
 
 
-map<string, map<int, double>> word_to_document_freqs_ ;
-
-
 class SearchServer
 {
 public:
@@ -92,8 +89,7 @@ public:
         sort(matched_documents.begin(), matched_documents.end(), [](const auto& lhs, const auto& rhs)
                                                                         {
                                                                             return lhs.relevance > rhs.relevance;
-                                                                        }                                                   );
-
+                                                                        }                                           );
 
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT)
         {
@@ -104,8 +100,6 @@ public:
 
     void AddDocument(int document_id, const string& document)
      {
-
-
         ++document_count_ ;
 
         const vector<string> words = SplitIntoWordsNoStop(document);
@@ -113,25 +107,26 @@ public:
         for ( const string& word : words)
 
         {
-            word_to_documents_[word].insert(document_id) ;
-
-
-
-
-
-              word_to_document_freqs_[word][document_id] += ( 1.0 / words.size() ) ;
+            word_to_document_freqs_[word].insert(document_id) ;
+            word_to_document_freqs_[word][document_id] += ( 1.0 / words.size() ) ;
         }
      }
 
 private:
 
     set<string> stop_words_;
-
-    map<string, set<int>> word_to_documents_ ;
-
+    map<string, map<int, double>> word_to_document_freqs_ ;
 
 
     int document_count_ = 0;
+
+
+    double CalcIDF  (int doc_id, string search_query_word )
+    {
+        return ( word_to_document_freqs_[search_query_word][doc_id] * log ( document_count_ * 1.0 / (word_to_document_freqs_.at(search_query_word).size() ) ) ) ;
+    }
+
+
 
     bool IsStopWord(const string& word) const
     {
@@ -153,12 +148,8 @@ private:
 
     set<string> ParseQuery(const string& text) const
     {
-
-
-
         for (const string& current_word : SplitIntoWordsNoStop(text))
         {
-
             if ( current_word[0] == '-' )
             {
                 search_query.minus_words.insert(current_word.substr(1));
@@ -168,47 +159,29 @@ private:
             {
                 search_query.plus_words.insert(current_word);
             }
-
         }
 
         return search_query.plus_words;
     }
 
     vector<Document> FindAllDocuments(const set<string>& local_plus_words) const
-
     {
         map<int, double> document_to_relevance ;
 
         vector<Document> matched_docs ;
 
-
         for ( auto& search_query_word : local_plus_words)
 
         {
+            if ( word_to_document_freqs_.count(search_query_word) != 0 )
 
-
-
-                if ( word_to_documents_.count(search_query_word) != 0 )
-
+            {
+                for (  int  id_docs_for_word : word_to_document_freqs_.at(search_query_word) )
                 {
-
-                    for (  int  id_docs_for_word : word_to_documents_.at(search_query_word) )
-
-
-                    {
-
-
-                        document_to_relevance[id_docs_for_word] += ( word_to_document_freqs_[search_query_word][id_docs_for_word] * log ( document_count_ * 1.0 / (word_to_documents_.at(search_query_word).size() ) ) ) ;
-
-
-
-                    }
-
-
-
-
-
+                    document_to_relevance[id_docs_for_word] +=  CalcIDF(search_query_word, id_docs_for_word, ) ;
                 }
+
+            }
 
         }
 
@@ -216,34 +189,31 @@ private:
         for (const auto& search_query_word : search_query.minus_words )
 
         {
-           if ( word_to_documents_.count(search_query_word) != 0 )
+            if ( word_to_document_freqs_.count(search_query_word) != 0 )
 
+            {
+                for ( auto doc_id : word_to_document_freqs_.at(search_query_word) )
                 {
-                    for ( auto doc_id : word_to_documents_.at(search_query_word) )
-                    {
-                            document_to_relevance[doc_id]  = 0   ;
-                    }
+                    document_to_relevance[doc_id]  = 0   ;
                 }
+            }
         }
 
 
 
-          for ( auto [ doc_pos_id , doc_pos_rel ] : document_to_relevance )
+        for ( auto [ doc_pos_id, doc_pos_rel ] : document_to_relevance )
 
-                {
-                    if ( doc_pos_rel ) matched_docs.push_back({doc_pos_id , doc_pos_rel}) ;
+        {
+            if ( doc_pos_rel ) matched_docs.push_back({doc_pos_id, doc_pos_rel}) ;
 
 
-                }
-
+        }
 
         return matched_docs ;
-
     }
-
-
-
 };
+
+
 
 SearchServer CreateSearchServer()
 {
@@ -276,6 +246,4 @@ int main()
     {
         cout << "{ document_id = "s << document_id << ", " << "relevance = "s << relevance << " }"s << endl  ;
     }
-
-
 }
