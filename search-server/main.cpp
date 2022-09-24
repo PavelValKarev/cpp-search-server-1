@@ -120,7 +120,7 @@ private:
     int document_count_ = 0;
 
 
-    double CalcIDF  (string search_query_word )
+    double CalcIDF  (string search_query_word ) const
     {
         return ( log ( document_count_ * 1.0 / (word_to_document_freqs_.at(search_query_word).size() ) ) ) ;
     }
@@ -191,7 +191,7 @@ private:
             if ( word_to_document_freqs_.count(search_query_word) != 0 )
 
             {
-                for ( auto doc_id : word_to_document_freqs_.at(search_query_word) )
+                for ( auto [doc_id, TF] : word_to_document_freqs_.at(search_query_word) )
                 {
                     document_to_relevance[doc_id]  = 0   ;
                 }
