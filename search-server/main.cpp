@@ -107,7 +107,6 @@ public:
         for ( const string& word : words)
 
         {
-            word_to_document_freqs_[word].insert(document_id) ;
             word_to_document_freqs_[word][document_id] += ( 1.0 / words.size() ) ;
         }
      }
@@ -121,9 +120,9 @@ private:
     int document_count_ = 0;
 
 
-    double CalcIDF  (int doc_id, string search_query_word )
+    double CalcIDF  (string search_query_word )
     {
-        return ( word_to_document_freqs_[search_query_word][doc_id] * log ( document_count_ * 1.0 / (word_to_document_freqs_.at(search_query_word).size() ) ) ) ;
+        return ( log ( document_count_ * 1.0 / (word_to_document_freqs_.at(search_query_word).size() ) ) ) ;
     }
 
 
@@ -176,9 +175,9 @@ private:
             if ( word_to_document_freqs_.count(search_query_word) != 0 )
 
             {
-                for (  int  id_docs_for_word : word_to_document_freqs_.at(search_query_word) )
+                for ( auto& [id_docs_for_word , TF ] : word_to_document_freqs_.at(search_query_word) )
                 {
-                    document_to_relevance[id_docs_for_word] +=  CalcIDF(search_query_word, id_docs_for_word, ) ;
+                    document_to_relevance[id_docs_for_word] +=  ( TF * CalcIDF(search_query_word) ) ;
                 }
 
             }
