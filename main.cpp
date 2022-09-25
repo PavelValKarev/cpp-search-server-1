@@ -69,9 +69,6 @@ struct SearchQuery
 SearchQuery search_query ;
 
 
-map<string, map<int, double>> word_to_document_freqs_ ;
-
-
 class SearchServer
 {
 public:
@@ -83,55 +80,52 @@ public:
         }
     }
 
-    vector<Document> FindTopDocuments(const string& raw_query) const   // получает сплошную строчку слов
+    vector<Document> FindTopDocuments(const string& raw_query) const
     {
-        const set<string> local_plus_words = ParseQuery(raw_query);          // пилит их на отдельные слова и делает из них упорядоченный вектор сет
+        const set<string> local_plus_words = ParseQuery(raw_query);
 
-        auto matched_documents = FindAllDocuments(local_plus_words);         // отправляет этот сет в функцию поиска всех совпаюащих доков (релевантность выше 0)
+        auto matched_documents = FindAllDocuments(local_plus_words);
 
-        sort(matched_documents.begin(), matched_documents.end(), [](const auto& lhs, const auto& rhs)    // сортирует полученный ВЕКТОР <ид релевантность> по релевантности
+        sort(matched_documents.begin(), matched_documents.end(), [](const auto& lhs, const auto& rhs)
                                                                         {
                                                                             return lhs.relevance > rhs.relevance;
-                                                                        }                                                   );
-
+                                                                        }                                           );
 
         if (matched_documents.size() > MAX_RESULT_DOCUMENT_COUNT)
         {
-            matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT) ;  // отпиливает лишние куски вектора
+            matched_documents.resize(MAX_RESULT_DOCUMENT_COUNT) ;
         }
         return matched_documents;
     }
 
-    void AddDocument(int document_id, const string& document) // получает ид и сплошную строку документа
+    void AddDocument(int document_id, const string& document)
      {
-
-
         ++document_count_ ;
 
-        const vector<string> words = SplitIntoWordsNoStop(document); // формируем вектор из распиленных слов ОДНОГО ДОКУМЕНТА
+        const vector<string> words = SplitIntoWordsNoStop(document);
 
-        for ( const string& word : words)   // идём по этому вектору со словами ОДНОГО ДОКУМЕНТА
+        for ( const string& word : words)
 
         {
-            word_to_documents_[word].insert(document_id) ;
-
-                // добавляем в мап доков [это_слово], а в сет ид доков этого слова .insert(ид текущего документа)
-
-
-
-              word_to_document_freqs_[word][document_id] += ( 1.0 / words.size() ) ;  // добавляем в мап с релевантностью слов в ключ этого слова \ ключ ид документа \ частоту встречания этого слова
+            word_to_document_freqs_[word][document_id] += ( 1.0 / words.size() ) ;
         }
      }
 
 private:
 
     set<string> stop_words_;
+    map<string, map<int, double>> word_to_document_freqs_ ;
 
-    map<string, set<int>> word_to_documents_ ;                 // мап каталога слов документа
 
-       // мап из ключ:[слова запроса] - значение:( MAP (ид дока , TF этого слова в доке)
+    int document_count_ = 0;
 
-    int document_count_ = 0;   // общее кол-во документов
+
+    double CalcIDF  (string search_query_word ) const
+    {
+        return ( log ( document_count_ * 1.0 / (word_to_document_freqs_.at(search_query_word).size() ) ) ) ;
+    }
+
+
 
     bool IsStopWord(const string& word) const
     {
@@ -153,12 +147,8 @@ private:
 
     set<string> ParseQuery(const string& text) const
     {
-
-
-
         for (const string& current_word : SplitIntoWordsNoStop(text))
         {
-
             if ( current_word[0] == '-' )
             {
                 search_query.minus_words.insert(current_word.substr(1));
@@ -168,82 +158,61 @@ private:
             {
                 search_query.plus_words.insert(current_word);
             }
-
         }
 
         return search_query.plus_words;
     }
 
-    vector<Document> FindAllDocuments(const set<string>& local_plus_words) const   // надо сформировать мап по СЛОВАМ ЗАПРОСА из мапов по ид дока и IDF ЭТОГО СЛОВА в этом доке
-
+    vector<Document> FindAllDocuments(const set<string>& local_plus_words) const
     {
-        map<int, double> document_to_relevance ; // здесь будут несортированные совпадающие доки - <ид, релевантность>
+        map<int, double> document_to_relevance ;
 
         vector<Document> matched_docs ;
 
-
-        for ( auto& search_query_word : local_plus_words)    // идём по ВЕКТОРУ слов поискового запроса (тут только плюс-слова, )
+        for ( auto& search_query_word : local_plus_words)
 
         {
+            if ( word_to_document_freqs_.count(search_query_word) != 0 )
 
-
-
-                if ( word_to_documents_.count(search_query_word) != 0 )  // ищем это слово в ключах мапа доков
-
+            {
+                for ( auto& [id_docs_for_word , TF ] : word_to_document_freqs_.at(search_query_word) )
                 {
-
-                    for (  int  id_docs_for_word : word_to_documents_.at(search_query_word) )
-
-
-                    {
-                         // =  log ( document_count_ / word_to_documents_.at(search_query_word).size()  )      ;  // пихаем ид-шники доков в которых оно есть в мап по вычислению релевантности на место ключа для ключа слова
-
-                        document_to_relevance[id_docs_for_word] += ( word_to_document_freqs_[search_query_word][id_docs_for_word] * log ( document_count_ * 1.0 / (word_to_documents_.at(search_query_word).size() ) ) ) ;
-
-
-
-                    }
-
-
-
-
-
+                    document_to_relevance[id_docs_for_word] +=  ( TF * CalcIDF(search_query_word) ) ;
                 }
-                // получаем в итоге мап из ключ:ид \ значение:релевантность
+
+            }
+
         }
 
 
-        for (const auto& search_query_word : search_query.minus_words ) // идём по минус словам
+        for (const auto& search_query_word : search_query.minus_words )
 
         {
-           if ( word_to_documents_.count(search_query_word) != 0 )  // ищем minus слово в ключах мапа доков
+            if ( word_to_document_freqs_.count(search_query_word) != 0 )
 
+            {
+                for ( auto [doc_id, TF] : word_to_document_freqs_.at(search_query_word) )
                 {
-                    for ( auto doc_id : word_to_documents_.at(search_query_word) )
-                    {
-                            document_to_relevance[doc_id]  = 0   ;     // идём по сету ключа и берём каждый ид, суём в map<int, int> - { ид, релевантность +1 }
-                    }
+                    document_to_relevance.erase(doc_id)  ;
                 }
+            }
         }
 
 
 
-          for ( auto [ doc_pos_id , doc_pos_rel ] : document_to_relevance )
+        for ( auto [ doc_pos_id, doc_pos_rel ] : document_to_relevance )
 
-                {
-                    if ( doc_pos_rel ) matched_docs.push_back({doc_pos_id , doc_pos_rel}) ;
+        {
+            if ( doc_pos_rel ) matched_docs.push_back({doc_pos_id, doc_pos_rel}) ;
 
 
-                }
-
+        }
 
         return matched_docs ;
-
     }
-
-
-
 };
+
+
 
 SearchServer CreateSearchServer()
 {
@@ -276,6 +245,4 @@ int main()
     {
         cout << "{ document_id = "s << document_id << ", " << "relevance = "s << relevance << " }"s << endl  ;
     }
-
-
 }
