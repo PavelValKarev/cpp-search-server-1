@@ -193,7 +193,7 @@ private:
             {
                 for ( auto [doc_id, TF] : word_to_document_freqs_.at(search_query_word) )
                 {
-                    document_to_relevance[doc_id]  = 0   ;
+                    document_to_relevance.erase(doc_id)  ;
                 }
             }
         }
