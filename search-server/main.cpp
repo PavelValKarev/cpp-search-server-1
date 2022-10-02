@@ -6,10 +6,12 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <numeric>
 
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
+const uint64_t delta = 1e-6 ;
 
 string ReadLine()
 {
@@ -93,8 +95,7 @@ public:
 
 
     template <typename Predicate>
-
-    vector<Document> FindTopDocuments(const string& raw_query,  const  Predicate  doc_predicate  ) const
+    vector<Document> FindTopDocuments(const string& raw_query, Predicate  doc_predicate  ) const
     {
         const Query query = ParseQuery(raw_query);
 
@@ -104,7 +105,7 @@ public:
 
              [](const Document& lhs, const Document& rhs)
         {
-            if (abs(lhs.relevance - rhs.relevance) < 1e-6)
+            if (abs(lhs.relevance - rhs.relevance) < delta )
             {
                 return lhs.rating > rhs.rating;
             }
@@ -122,12 +123,9 @@ public:
     }
 
 
-
-
-    vector<Document> FindTopDocuments(const string& raw_query) const {
-
+    vector<Document> FindTopDocuments(const string& raw_query) const
+    {
         return FindTopDocuments(raw_query, DocumentStatus::ACTUAL ) ;
-
     }
 
 
@@ -136,10 +134,9 @@ public:
 
     {
         return FindTopDocuments(raw_query, [status](int document_id, DocumentStatus doc_status, int rating)
-
         {
             return doc_status == status ;
-        });
+        } ) ;
     }
 
 
@@ -181,6 +178,7 @@ public:
     }
 
 private:
+
     struct DocumentData
     {
         int rating;
@@ -215,11 +213,9 @@ private:
         {
             return 0;
         }
-        int rating_sum = 0;
-        for (const int rating : ratings)
-        {
-            rating_sum += rating;
-        }
+
+        int rating_sum = accumulate(ratings.begin(), ratings.end(), 0) ;
+
         return rating_sum / static_cast<int>(ratings.size());
     }
 
@@ -269,15 +265,15 @@ private:
         return query;
     }
 
-    // Existence required
+
     double ComputeWordInverseDocumentFreq(const string& word) const
     {
         return log(GetDocumentCount() * 1.0 / word_to_document_freqs_.at(word).size());
     }
 
 
-    template <typename Predicate>
 
+    template <typename Predicate>
     vector<Document> FindAllDocuments(const Query& query, Predicate doc_predicate ) const
     {
         map<int, double> document_to_relevance;
@@ -293,9 +289,11 @@ private:
             for (const auto [document_id, term_freq] : word_to_document_freqs_.at(word))
             {
 
+                DocumentData current_doc = documents_.at(document_id) ;
+
                 if (doc_predicate( document_id,
-                                  documents_.at(document_id).status,
-                                  documents_.at(document_id).rating) )
+                                   current_doc.status,
+                                   current_doc.rating) )
                 {
                     document_to_relevance[document_id] += term_freq * inverse_document_freq;
                 }
@@ -324,7 +322,7 @@ private:
     }
 };
 
-// ==================== для примера =========================
+
 
 void PrintDocument(const Document& document)
 {
@@ -334,7 +332,8 @@ void PrintDocument(const Document& document)
          << "rating = "s << document.rating << " }"s << endl;
 }
 
-int main() {
+int main()
+{
     SearchServer search_server;
     search_server.SetStopWords("и в на"s);
     search_server.AddDocument(0, "белый кот и модный ошейник"s,        DocumentStatus::ACTUAL, {8, -3});
@@ -342,16 +341,30 @@ int main() {
     search_server.AddDocument(2, "ухоженный пёс выразительные глаза"s, DocumentStatus::ACTUAL, {5, -12, 2, 1});
     search_server.AddDocument(3, "ухоженный скворец евгений"s,         DocumentStatus::BANNED, {9});
     cout << "ACTUAL by default:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s)) {
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s))
+    {
         PrintDocument(document);
     }
     cout << "ACTUAL:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating) { return status == DocumentStatus::ACTUAL; })) {
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating)
+    {
+        return status == DocumentStatus::ACTUAL;
+    }))
+
+    {
         PrintDocument(document);
     }
+
     cout << "Even ids:"s << endl;
-    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating) { return document_id % 2 == 0; })) {
+
+    for (const Document& document : search_server.FindTopDocuments("пушистый ухоженный кот"s, [](int document_id, DocumentStatus status, int rating)
+    {
+        return document_id % 2 == 0;
+    }))
+
+    {
         PrintDocument(document);
     }
+
     return 0;
 }
