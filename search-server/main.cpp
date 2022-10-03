@@ -11,7 +11,7 @@
 using namespace std;
 
 const int MAX_RESULT_DOCUMENT_COUNT = 5;
-const uint64_t delta = 1e-6 ;
+const double RELEVANCE_DELTA = 1e-6 ;
 
 string ReadLine()
 {
@@ -105,7 +105,7 @@ public:
 
              [](const Document& lhs, const Document& rhs)
         {
-            if (abs(lhs.relevance - rhs.relevance) < delta )
+            if (abs(lhs.relevance - rhs.relevance) < RELEVANCE_DELTA )
             {
                 return lhs.rating > rhs.rating;
             }
